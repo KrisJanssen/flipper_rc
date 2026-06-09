@@ -17,7 +17,8 @@
                 "description": "Please enter the serial port name of your Flipper Zero device. In Linux, it is usually something like /dev/ttyACM0 or /dev/ttyACM1. In Windows, it is usually something like COM1 or COM2.",
                 "data": {
                     "port": "Serial Port",
-                    "name": "Device name"
+                    "name": "Device name",
+                    "external_antenna": "Use external antenna"
                 }
             },
             "port_linux": {
@@ -25,7 +26,8 @@
                 "description": "Please enter the serial port name of your Flipper Zero device. In Linux, it is usually something like /dev/ttyACM0 or /dev/ttyACM1.",
                 "data": {
                     "port": "Serial Port",
-                    "name": "Device name"
+                    "name": "Device name",
+                    "external_antenna": "Use external antenna"
                 }
             },
             "port_windows": {
@@ -33,7 +35,8 @@
                 "description": "Please enter the serial port name of your Flipper Zero device. In Windows, it is usually something like COM1 or COM2. You can find the port name in the Device Manager under Ports (COM & LPT).",
                 "data": {
                     "port": "Serial Port",
-                    "name": "Device name"
+                    "name": "Device name",
+                    "external_antenna": "Use external antenna"
                 }
             },
             "port_auto_detected": {
@@ -41,7 +44,18 @@
                 "description": "Please enter the serial port name of your Flipper Zero device. But seems like we have already detected it. If you want to change it, please enter the new port name.",
                 "data": {
                     "port": "Serial Port",
-                    "name": "Device name"
+                    "name": "Device name",
+                    "external_antenna": "Use external antenna"
+                }
+            }
+        }
+    },
+    "options": {
+        "step": {
+            "init": {
+                "title": "Antenna Settings",
+                "data": {
+                    "external_antenna": "Use external antenna"
                 }
             }
         }
