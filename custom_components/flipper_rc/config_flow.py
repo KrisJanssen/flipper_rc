@@ -5,6 +5,7 @@ import voluptuous as vol
 import os
 import aiofiles.os
 import asyncio
+from homeassistant.core import callback
 from homeassistant.helpers.storage import Store
 from .flipper_ir import FlipperIR
 
@@ -31,7 +32,8 @@ class FlipperZeroRCConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # Default config
         self.config = {
             CONF_NAME: DEFAULT_FRIENDLY_NAME,
-            CONF_PORT: DEFAULT_PORT_LINUX if os.name != 'nt' else DEFAULT_PORT_WINDOWS
+            CONF_PORT: DEFAULT_PORT_LINUX if os.name != 'nt' else DEFAULT_PORT_WINDOWS,
+            CONF_EXTERNAL_ANTENNA: False,
         }
         self.auto_detected = False
 
@@ -52,6 +54,7 @@ class FlipperZeroRCConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors = {}
         if user_input is not None:
             self.config[CONF_PORT] = user_input[CONF_PORT]
+            self.config[CONF_EXTERNAL_ANTENNA] = user_input.get(CONF_EXTERNAL_ANTENNA, False)
             device = None
             try:
                 unique_id = f"{DOMAIN}_{self.config[CONF_PORT]}"
@@ -88,6 +91,7 @@ class FlipperZeroRCConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             {
                 vol.Required(CONF_PORT, default=self.config[CONF_PORT]): cv.string,
                 vol.Required(CONF_NAME, default=self.config[CONF_NAME]): cv.string,
+                vol.Required(CONF_EXTERNAL_ANTENNA, default=self.config[CONF_EXTERNAL_ANTENNA]): cv.boolean,
             }
         )
         step_name = "port"
@@ -112,3 +116,24 @@ class FlipperZeroRCConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_port_linux(self, user_input=None):
         """Handle the port step."""
         return await self.async_step_port(user_input)
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry):
+        return FlipperZeroRCOptionsFlow()
+
+
+class FlipperZeroRCOptionsFlow(config_entries.OptionsFlow):
+    async def async_step_init(self, user_input=None):
+        if user_input is not None:
+            return self.async_create_entry(title="", data=user_input)
+        current = self.config_entry.options.get(
+            CONF_EXTERNAL_ANTENNA,
+            self.config_entry.data.get(CONF_EXTERNAL_ANTENNA, False),
+        )
+        return self.async_show_form(
+            step_id="init",
+            data_schema=vol.Schema({
+                vol.Required(CONF_EXTERNAL_ANTENNA, default=current): cv.boolean,
+            }),
+        )

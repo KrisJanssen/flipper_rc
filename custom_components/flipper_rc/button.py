@@ -3,13 +3,14 @@
 import asyncio
 import logging
 import os
+import time
 
 from homeassistant.components.button import ButtonEntity
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.util import slugify
 
-from .const import DOMAIN
+from .const import DOMAIN, CONF_EXTERNAL_ANTENNA
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -17,6 +18,7 @@ _LOGGER = logging.getLogger(__name__)
 # during config entry setup before giving up on creating button entities.
 REMOTE_ENTITY_READY_MAX_RETRIES = 25
 REMOTE_ENTITY_READY_RETRY_DELAY_SECONDS = 0.2
+BUTTON_DEBOUNCE_SECONDS = 1.0
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
@@ -82,8 +84,14 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
     _LOGGER.info("Discovered %d Sub-GHz files for %s", len(files), remote_entity.port)
 
+    use_external_antenna = entry.options.get(
+        CONF_EXTERNAL_ANTENNA,
+        entry.data.get(CONF_EXTERNAL_ANTENNA, False),
+    )
+    antenna = 1 if use_external_antenna else 0
+
     entities = [
-        FlipperSubGhzFileButton(remote_entity, path)
+        FlipperSubGhzFileButton(remote_entity, path, antenna)
         for path in files
     ]
     async_add_entities(entities)
@@ -92,10 +100,13 @@ async def async_setup_entry(hass, entry, async_add_entities):
 class FlipperSubGhzFileButton(ButtonEntity):
     """Button to replay one saved Sub-GHz file from Flipper storage."""
 
-    def __init__(self, remote_entity, file_path):
+    def __init__(self, remote_entity, file_path, antenna=0):
         self._remote_entity = remote_entity
         self._port = remote_entity.port
         self._file_path = file_path
+        self._antenna = antenna
+        self._press_lock = asyncio.Lock()
+        self._last_press_time = 0.0
 
         base_name = os.path.splitext(os.path.basename(file_path))[0] or "subghz"
         self._attr_name = f"Sub-GHz {base_name}"
@@ -111,14 +122,23 @@ class FlipperSubGhzFileButton(ButtonEntity):
     def extra_state_attributes(self):
         return {
             "file_path": self._file_path,
-            "command": f"subghz-file:path={self._file_path},repeat=1,antenna=0",
+            "command": f"subghz-file:path={self._file_path},repeat=1,antenna={self._antenna}",
         }
 
     async def async_press(self):
         """Replay file when button is pressed."""
-        _LOGGER.info("Sending Sub-GHz saved file: %s", self._file_path)
-        try:
-            await self._remote_entity.async_send_subghz_from_file(self._file_path, repeat=1, antenna=0)
-        except Exception as e:
-            _LOGGER.error("Failed to send Sub-GHz saved file %s: %s", self._file_path, e, exc_info=True)
-            raise
+        now = time.monotonic()
+        if now - self._last_press_time < BUTTON_DEBOUNCE_SECONDS:
+            _LOGGER.debug("Debouncing Sub-GHz button press for %s", self._file_path)
+            return
+        if self._press_lock.locked():
+            _LOGGER.debug("Sub-GHz button press already in progress for %s", self._file_path)
+            return
+        self._last_press_time = now
+        async with self._press_lock:
+            _LOGGER.info("Sending Sub-GHz saved file: %s", self._file_path)
+            try:
+                await self._remote_entity.async_send_subghz_from_file(self._file_path, repeat=1, antenna=self._antenna)
+            except Exception as e:
+                _LOGGER.error("Failed to send Sub-GHz saved file %s: %s", self._file_path, e, exc_info=True)
+                raise
