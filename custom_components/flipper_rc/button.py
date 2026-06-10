@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import os
+import time
 
 from homeassistant.components.button import ButtonEntity
 from homeassistant.helpers import entity_registry as er
@@ -17,6 +18,7 @@ _LOGGER = logging.getLogger(__name__)
 # during config entry setup before giving up on creating button entities.
 REMOTE_ENTITY_READY_MAX_RETRIES = 25
 REMOTE_ENTITY_READY_RETRY_DELAY_SECONDS = 0.2
+BUTTON_DEBOUNCE_SECONDS = 1.0
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
@@ -103,6 +105,8 @@ class FlipperSubGhzFileButton(ButtonEntity):
         self._port = remote_entity.port
         self._file_path = file_path
         self._antenna = antenna
+        self._press_lock = asyncio.Lock()
+        self._last_press_time = 0.0
 
         base_name = os.path.splitext(os.path.basename(file_path))[0] or "subghz"
         self._attr_name = f"Sub-GHz {base_name}"
@@ -123,9 +127,18 @@ class FlipperSubGhzFileButton(ButtonEntity):
 
     async def async_press(self):
         """Replay file when button is pressed."""
-        _LOGGER.info("Sending Sub-GHz saved file: %s", self._file_path)
-        try:
-            await self._remote_entity.async_send_subghz_from_file(self._file_path, repeat=1, antenna=self._antenna)
-        except Exception as e:
-            _LOGGER.error("Failed to send Sub-GHz saved file %s: %s", self._file_path, e, exc_info=True)
-            raise
+        now = time.monotonic()
+        if now - self._last_press_time < BUTTON_DEBOUNCE_SECONDS:
+            _LOGGER.debug("Debouncing Sub-GHz button press for %s", self._file_path)
+            return
+        if self._press_lock.locked():
+            _LOGGER.debug("Sub-GHz button press already in progress for %s", self._file_path)
+            return
+        self._last_press_time = now
+        async with self._press_lock:
+            _LOGGER.info("Sending Sub-GHz saved file: %s", self._file_path)
+            try:
+                await self._remote_entity.async_send_subghz_from_file(self._file_path, repeat=1, antenna=self._antenna)
+            except Exception as e:
+                _LOGGER.error("Failed to send Sub-GHz saved file %s: %s", self._file_path, e, exc_info=True)
+                raise
