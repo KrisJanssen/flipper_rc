@@ -120,19 +120,16 @@ class FlipperZeroRCConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @staticmethod
     @callback
     def async_get_options_flow(config_entry):
-        return FlipperZeroRCOptionsFlow(config_entry)
+        return FlipperZeroRCOptionsFlow()
 
 
 class FlipperZeroRCOptionsFlow(config_entries.OptionsFlow):
-    def __init__(self, config_entry):
-        self._config_entry = config_entry
-
     async def async_step_init(self, user_input=None):
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
-        current = self._config_entry.options.get(
+        current = self.config_entry.options.get(
             CONF_EXTERNAL_ANTENNA,
-            self._config_entry.data.get(CONF_EXTERNAL_ANTENNA, False),
+            self.config_entry.data.get(CONF_EXTERNAL_ANTENNA, False),
         )
         return self.async_show_form(
             step_id="init",
